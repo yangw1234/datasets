@@ -146,12 +146,9 @@ If you are familiar with the
 [dataset creation guide](https://github.com/tensorflow/datasets/tree/master/docs/add_dataset.md),
 adding a Beam dataset only requires a few modifications:
 
-*   Your `DatasetBuilder` will inherit from `tfds.core.BeamBasedBuilder` instead
-    of `tfds.core.GeneratorBasedBuilder`.
-*   Beam datasets should implement the abstract method `_build_pcollection(self,
-    **kwargs)` instead of the method `_generate_examples(self, **kwargs)`.
-    `_build_pcollection` should return a `beam.PCollection` with the examples
-    associated with the split.
+*   Instead of being a generator, `_generate_examples(self, **kwargs)` should
+    return a `beam.PTransform` returning with the `(key, examples)` associated
+    with the split.
 *   Writing a unit test for your Beam dataset is the same as with other
     datasets.
 
@@ -192,18 +189,12 @@ class DummyBeamDataset(tfds.core.BeamBasedBuilder):
 
   def _split_generators(self, dl_manager):
     ...
-    return [
-        tfds.core.SplitGenerator(
-            name=tfds.Split.TRAIN,
-            gen_kwargs=dict(file_dir='path/to/train_data/'),
-        ),
-        splits_lib.SplitGenerator(
-            name=tfds.Split.TEST,
-            gen_kwargs=dict(file_dir='path/to/test_data/'),
-        ),
-    ]
+    return {
+        'train': self._generate_examples(file_dir='path/to/train_data/'),
+        'test': self._generate_examples(file_dir='path/to/test_data/'),
+    }
 
-  def _build_pcollection(self, pipeline, file_dir):
+  def _generate_examples(self, file_dir: str):
     """Generate examples as dicts."""
     beam = tfds.core.lazy_imports.apache_beam
 
@@ -215,7 +206,6 @@ class DummyBeamDataset(tfds.core.BeamBasedBuilder):
       }
 
     return (
-        pipeline
         | beam.Create(tf.io.gfile.listdir(file_dir))
         | beam.Map(_process_example)
     )

@@ -63,19 +63,6 @@ class DummyDatasetWithConfigs(dataset_builder.GeneratorBasedBuilder):
           increment=2),
   ]
 
-  def _split_generators(self, dl_manager):
-    del dl_manager
-    return [
-        splits_lib.SplitGenerator(
-            name=splits_lib.Split.TRAIN,
-            gen_kwargs={"range_": range(20)},
-        ),
-        splits_lib.SplitGenerator(
-            name=splits_lib.Split.TEST,
-            gen_kwargs={"range_": range(20, 30)},
-        ),
-    ]
-
   def _info(self):
 
     return dataset_info.DatasetInfo(
@@ -83,6 +70,13 @@ class DummyDatasetWithConfigs(dataset_builder.GeneratorBasedBuilder):
         features=features.FeaturesDict({"x": tf.int64}),
         supervised_keys=("x", "x"),
     )
+
+  def _split_generators(self, dl_manager):
+    del dl_manager
+    return {
+        "train": self._generate_examples(range(20)),
+        "test": self._generate_examples(range(20, 30)),
+    }
 
   def _generate_examples(self, range_):
     for i in range_:
@@ -95,11 +89,8 @@ class DummyDatasetWithConfigs(dataset_builder.GeneratorBasedBuilder):
 class InvalidSplitDataset(DummyDatasetWithConfigs):
 
   def _split_generators(self, _):
-    return [
-        splits_lib.SplitGenerator(
-            name="all",  # Error: ALL cannot be used as Split key
-        )
-    ]
+    # Error: ALL cannot be used as Split key
+    return {"all": self._generate_examples(range(5))}
 
 
 class DatasetBuilderTest(testing.TestCase):
@@ -107,7 +98,6 @@ class DatasetBuilderTest(testing.TestCase):
   @classmethod
   def setUpClass(cls):
     super(DatasetBuilderTest, cls).setUpClass()
-    dataset_builder._is_py2_download_and_prepare_disabled = False
     cls.builder = DummyDatasetSharedGenerator(
         data_dir=os.path.join(tempfile.gettempdir(), "tfds"))
     cls.builder.download_and_prepare()
@@ -346,7 +336,7 @@ class DatasetBuilderTest(testing.TestCase):
   def test_invalid_split_dataset(self):
     with testing.tmp_dir(self.get_temp_dir()) as tmp_dir:
       with self.assertRaisesWithPredicateMatch(
-          ValueError, "`all` is a special"):
+          ValueError, "`all` is a reserved keyword"):
         # Raise error during .download_and_prepare()
         load.load(
             name="invalid_split_dataset",
@@ -484,16 +474,6 @@ class BuilderPickleTest(testing.TestCase):
 
 class BuilderRestoreGcsTest(testing.TestCase):
 
-  @classmethod
-  def setUpClass(cls):
-    super(BuilderRestoreGcsTest, cls).setUpClass()
-    dataset_builder._is_py2_download_and_prepare_disabled = False
-
-  @classmethod
-  def tearDownClass(cls):
-    dataset_builder._is_py2_download_and_prepare_disabled = True
-    super(BuilderRestoreGcsTest, cls).tearDownClass()
-
   def setUp(self):
     super(BuilderRestoreGcsTest, self).setUp()
 
@@ -613,7 +593,6 @@ class DatasetBuilderReadTest(testing.TestCase):
   @classmethod
   def setUpClass(cls):
     super(DatasetBuilderReadTest, cls).setUpClass()
-    dataset_builder._is_py2_download_and_prepare_disabled = False
     cls._tfds_tmp_dir = testing.make_tmp_dir()
     builder = DummyDatasetSharedGenerator(data_dir=cls._tfds_tmp_dir)
     builder.download_and_prepare()
@@ -621,7 +600,6 @@ class DatasetBuilderReadTest(testing.TestCase):
   @classmethod
   def tearDownClass(cls):
     super(DatasetBuilderReadTest, cls).tearDownClass()
-    dataset_builder._is_py2_download_and_prepare_disabled = True
     testing.rm_tmp_dir(cls._tfds_tmp_dir)
 
   def setUp(self):
@@ -743,12 +721,7 @@ class NestedSequenceBuilder(dataset_builder.GeneratorBasedBuilder):
 
   def _split_generators(self, dl_manager):
     del dl_manager
-    return [
-        splits_lib.SplitGenerator(
-            name=splits_lib.Split.TRAIN,
-            gen_kwargs={},
-        ),
-    ]
+    return {"train": self._generate_examples()}
 
   def _generate_examples(self):
     ex0 = [
